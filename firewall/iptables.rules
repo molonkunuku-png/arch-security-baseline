@@ -1,0 +1,42 @@
+# iptables baseline rules
+# Copy to /etc/iptables/iptables.rules
+# Load with: sudo iptables-restore < iptables.rules
+# Save with:   sudo iptables-save > /etc/iptables/iptables.rules
+#              sudo systemctl enable iptables
+
+# Flush existing rules
+*filter
+:INPUT DROP [0:0]
+:FORWARD DROP [0:0]
+:OUTPUT ACCEPT [0:0]
+
+# --- Allow loopback ---
+-A INPUT -i lo -j ACCEPT
+-A INPUT ! -i lo -d 127.0.0.0/8 -j DROP
+
+# --- Allow established connections ---
+-A INPUT -m conntrack --ctstate RELATED,ESTABLISHED -j ACCEPT
+
+# --- Allow SSH (limit brute force attempts) ---
+-A INPUT -p tcp --dport 22 -m conntrack --ctstate NEW -m limit --limit 3/min --limit-burst 3 -j ACCEPT
+-A INPUT -p tcp --dport 22 -m conntrack --ctstate NEW -j DROP
+
+# --- Allow ICMP (ping) with rate limit ---
+-A INPUT -p icmp --icmp-type echo-request -m limit --limit 1/s -j ACCEPT
+-A INPUT -p icmp --icmp-type echo-request -j DROP
+
+# --- Log and drop invalid packets ---
+-A INPUT -m conntrack --ctstate INVALID -j DROP
+-A INPUT -j LOG --log-prefix "[IPTABLES DROP] " --log-level 4
+
+# --- Drop fragments ---
+-A INPUT -f -j DROP
+
+COMMIT
+
+# --- NAT (uncomment if needed) ---
+# *nat
+# :PREROUTING ACCEPT [0:0]
+# :POSTROUTING ACCEPT [0:0]
+# -A POSTROUTING -o eth0 -j MASQUERADE
+# COMMIT
