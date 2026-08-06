@@ -40,3 +40,29 @@ COMMIT
 # :POSTROUTING ACCEPT [0:0]
 # -A POSTROUTING -o eth0 -j MASQUERADE
 # COMMIT
+
+# --- IPv6 (ip6tables) ---
+*filter
+:INPUT DROP [0:0]
+:FORWARD DROP [0:0]
+:OUTPUT ACCEPT [0:0]
+
+# Allow loopback
+-A INPUT -i lo -j ACCEPT
+-A INPUT ! -i lo -d ::1/128 -j DROP
+
+# Allow established/related
+-A INPUT -m conntrack --ctstate RELATED,ESTABLISHED -j ACCEPT
+
+# Allow SSH
+-A INPUT -p tcp --dport 22 -m conntrack --ctstate NEW -m limit --limit 3/min --limit-burst 3 -j ACCEPT
+-A INPUT -p tcp --dport 22 -m conntrack --ctstate NEW -j DROP
+
+# Allow ICMPv6 (required for NDP)
+-A INPUT -p ipv6-icmp -j ACCEPT
+
+# Drop invalid
+-A INPUT -m conntrack --ctstate INVALID -j DROP
+-A INPUT -j LOG --log-prefix "[IP6TABLES DROP] " --log-level 4
+
+COMMIT
