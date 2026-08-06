@@ -1,0 +1,27 @@
+# git
+.git
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+.venv/
+venv/
+
+# OS
+.DS_Store
+Thumbs.db
+*.swp
+*.swo
+*~
+
+# Backups
+*.bak
+*.orig
+*.tmp
+
+# Secrets
+*.key
+*.pem
+*.p12
+.env
