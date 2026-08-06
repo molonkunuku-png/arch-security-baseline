@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-VERSION="1.1.0"
+VERSION="1.2.0"
 DRY_RUN=false
 RESTORE=false
 BACKUP_DIR=""
@@ -74,6 +74,10 @@ if $RESTORE; then
         sudo cp "$BACKUP_DIR/iptables.rules" /etc/iptables/iptables.rules
         sudo iptables-restore < "$BACKUP_DIR/iptables.rules"
     fi
+    if [[ -f "$BACKUP_DIR/ip6tables.rules" ]]; then
+        sudo cp "$BACKUP_DIR/ip6tables.rules" /etc/iptables/ip6tables.rules
+        sudo ip6tables-restore < "$BACKUP_DIR/ip6tables.rules"
+    fi
     if [[ -f "$BACKUP_DIR/audit.rules" ]]; then
         sudo cp "$BACKUP_DIR/audit.rules" /etc/audit/rules.d/99-hardening.rules
         sudo augenrules --load
@@ -99,7 +103,7 @@ $DRY_RUN && echo "[*] DRY RUN — no changes will be made"
 echo ""
 
 # Preflight checks
-for cmd in sudo sysctl iptables-restore sshd auditctl augenrules; do
+for cmd in sudo sysctl iptables-restore ip6tables-restore sshd auditctl augenrules; do
     if ! command_exists "$cmd"; then
         warn "$cmd not found — some checks will be skipped"
     fi
@@ -116,6 +120,7 @@ echo "[*] Backup directory: $BACKUP_DIR"
 [[ -f /etc/sysctl.d/99-hardening.conf ]] && sudo cp /etc/sysctl.d/99-hardening.conf "$BACKUP_DIR/sysctl.conf"
 [[ -f /etc/ssh/sshd_config.d/99-hardening.conf ]] && sudo cp /etc/ssh/sshd_config.d/99-hardening.conf "$BACKUP_DIR/sshd_config"
 [[ -f /etc/iptables/iptables.rules ]] && sudo cp /etc/iptables/iptables.rules "$BACKUP_DIR/iptables.rules"
+[[ -f /etc/iptables/ip6tables.rules ]] && sudo cp /etc/iptables/ip6tables.rules "$BACKUP_DIR/ip6tables.rules"
 [[ -f /etc/audit/rules.d/99-hardening.rules ]] && sudo cp /etc/audit/rules.d/99-hardening.rules "$BACKUP_DIR/audit.rules"
 [[ -f /etc/lynis/custom.prf ]] && sudo cp /etc/lynis/custom.prf "$BACKUP_DIR/lynis.prf"
 
@@ -141,17 +146,32 @@ fi
 if [[ -f "$BASE_DIR/firewall/iptables.rules" ]]; then
     if command_exists iptables-restore; then
         if $DRY_RUN; then
-            echo "[DRY] Would load iptables rules from $BASE_DIR/firewall/iptables.rules"
+            echo "[DRY] Would load IPv4 iptables rules"
         else
-            echo "[*] Loading iptables rules..."
+            echo "[*] Loading IPv4 iptables rules..."
             sudo iptables-restore < "$BASE_DIR/firewall/iptables.rules"
-            ok "iptables rules loaded (reboot to make persistent — or install iptables-save)"
+            ok "iptables rules loaded"
         fi
     else
         skip "iptables-restore not found — skip"
     fi
 else
     warn "firewall/iptables.rules not found"
+fi
+
+# --- ip6tables ---
+if [[ -f "$BASE_DIR/firewall/iptables.rules" ]]; then
+    if command_exists ip6tables-restore; then
+        if $DRY_RUN; then
+            echo "[DRY] Would load IPv6 ip6tables rules"
+        else
+            echo "[*] Loading IPv6 ip6tables rules..."
+            sudo ip6tables-restore < "$BASE_DIR/firewall/iptables.rules"
+            ok "ip6tables rules loaded"
+        fi
+    else
+        skip "ip6tables-restore not found — skip"
+    fi
 fi
 
 # --- sshd ---
@@ -161,6 +181,7 @@ if [[ -f "$BASE_DIR/ssh/sshd_config" ]]; then
             echo "[DRY] Would copy sshd_config to /etc/ssh/sshd_config.d/99-hardening.conf"
         else
             echo "[*] Deploying SSH hardening..."
+            echo "    [!] Remember to set AllowUsers in sshd_config before reloading"
             sudo mkdir -p /etc/ssh/sshd_config.d
             sudo cp "$BASE_DIR/ssh/sshd_config" /etc/ssh/sshd_config.d/99-hardening.conf
             if sudo sshd -t; then
